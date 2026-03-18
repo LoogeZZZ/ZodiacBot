@@ -26,14 +26,21 @@ func InitDB(connStr string) *pgxpool.Pool {
 		text TEXT NOT NULL
 	);`
 
+	dailyHoroscope := `CREATE TABLE IF NOT EXISTS daily_horoscope (
+		id SERIAL PRIMARY KEY,
+		zodiac_sign TEXT NOT NULL,
+		prediction_text TEXT NOT NULL,
+		target_date DATE DEFAULT CURRENT_DATE,
+		UNIQUE(zodiac_sign, target_date);`
+
 	ctx := context.Background()
+	db.Exec(ctx, dailyHoroscope)
 	db.Exec(ctx, userTable)
 	db.Exec(ctx, predTable)
 
 	return db
 }
 
-// UpsertUser сохраняет или обновляет выбор знака зодиака
 func UpsertUser(db *pgxpool.Pool, u User) error {
 	query := `
 		INSERT INTO users (id, username, zodiac_sign) 
@@ -44,7 +51,6 @@ func UpsertUser(db *pgxpool.Pool, u User) error {
 	return err
 }
 
-// GetUserByID находит юзера по его ID
 func GetUserByID(db *pgxpool.Pool, userID int64) (User, error) {
 	var u User
 	err := db.QueryRow(context.Background(), "SELECT id, username, zodiac_sign FROM users WHERE id=$1", userID).
@@ -52,13 +58,33 @@ func GetUserByID(db *pgxpool.Pool, userID int64) (User, error) {
 	return u, err
 }
 
-// GetRandomPrediction берет один случайный текст из таблицы прогнозов
-func GetRandomPrediction(db *pgxpool.Pool) (string, error) {
+func GetRandomPredictionBySign(db *pgxpool.Pool, sign string) (string, error) {
 	var txt string
-	query := `SELECT text FROM predictions ORDER BY RANDOM() LIMIT 1`
-	err := db.QueryRow(context.Background(), query).Scan(&txt)
+
+	query := `SELECT text FROM predictions WHERE zodiac_sign = $1 ORDER BY RANDOM() LIMIT 1`
+
+	err := db.QueryRow(context.Background(), query, sign).Scan(&txt)
 	if err != nil {
 		return "", err
 	}
 	return txt, nil
+}
+
+func SaveDailyPrediction(db *pgxpool.Pool, sign string, text string) error {
+	query := `
+		INSERT INTO daily_horoscope (zodiac_sign, prediction_text, target_date) 
+		VALUES ($1, $2, CURRENT_DATE)
+		ON CONFLICT (zodiac_sign, target_date) 
+		DO UPDATE SET prediction_text = EXCLUDED.prediction_text;`
+
+	_, err := db.Exec(context.Background(), query, sign, text)
+	return err
+}
+
+func GetDailyPrediction(db *pgxpool.Pool, sign string) (string, error) {
+	var txt string
+	query := `SELECT prediction_text FROM daily_horoscope WHERE zodiac_sign = $1 AND target_date = CURRENT_DATE`
+
+	err := db.QueryRow(context.Background(), query, sign).Scan(&txt)
+	return txt, err
 }

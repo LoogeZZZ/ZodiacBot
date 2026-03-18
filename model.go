@@ -1,13 +1,27 @@
 package main
 
-// User описывает данные пользователя в системе.
+type DeepSeekRequest struct {
+	Model    string      `json:"model"`
+	Messages []AIMessage `json:"messages"`
+}
+
+type AIMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type DeepSeekResponse struct {
+	Choices []struct {
+		Message AIMessage `json:"message"`
+	} `json:"choices"`
+}
+
 type User struct {
 	ID         int64  // Telegram User ID
 	Username   string // Никнейм пользователя
 	ZodiacSign string // Технический код знака (aries, leo...)
 }
 
-// ZodiacNames сопоставляет технический код с красивым названием.
 var ZodiacNames = map[string]string{
 	"aries":       "Овен ♈",
 	"taurus":      "Телец ♉",

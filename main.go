@@ -10,9 +10,10 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lpernett/godotenv"
+	"github.com/robfig/cron/v3"
 )
 
-var db *pgxpool.Pool
+var dbpool *pgxpool.Pool
 
 func main() {
 	godotenv.Load()
@@ -24,8 +25,14 @@ func main() {
 		log.Fatal("Ошибка: переменные окружения DB_URL или BOT_TOKEN не установлены")
 	}
 
-	dbpool := InitDB(dbURL)
+	var err error
+	dbpool = InitDB(dbURL)
 	defer dbpool.Close()
+
+	log.Println("Запуск проверки генерации ИИ...")
+	runDailyUpdate(dbpool)
+
+	startCron(dbpool)
 
 	bot, err := tgbotapi.NewBotAPI(botToken)
 	if err != nil {
@@ -49,6 +56,7 @@ func main() {
 			handleMessage(bot, dbpool, update.Message)
 		}
 	}
+
 }
 
 func handleMessage(bot *tgbotapi.BotAPI, dbpool *pgxpool.Pool, msg *tgbotapi.Message) {
@@ -83,9 +91,16 @@ func handleMessage(bot *tgbotapi.BotAPI, dbpool *pgxpool.Pool, msg *tgbotapi.Mes
 				bot.Send(tgbotapi.NewMessage(msg.Chat.ID, "Сначала выбери знак! 👆"))
 				return
 			}
-			prediction, _ := GetRandomPrediction(dbpool)
+
+			prediction, err := GetDailyPrediction(dbpool, user.ZodiacSign)
+			if err != nil {
+				// Если в базе нет на сегодня, генерируем на лету
+				prediction, _ = GenerateDailyHoroscope(user.ZodiacSign)
+				SaveDailyPrediction(dbpool, user.ZodiacSign, prediction)
+			}
+
 			if prediction == "" {
-				prediction = "Звезды сегодня в ахуе и молчат. "
+				prediction = "Звезды сегодня в ахуе и молчат."
 			}
 
 			text := fmt.Sprintf("🔮 Прогноз для тебя (%s):\n\n%s", ZodiacNames[user.ZodiacSign], prediction)
@@ -113,7 +128,12 @@ func handleMessage(bot *tgbotapi.BotAPI, dbpool *pgxpool.Pool, msg *tgbotapi.Mes
 			return
 		}
 
-		prediction, _ := GetRandomPrediction(dbpool)
+		prediction, err := GetDailyPrediction(dbpool, user.ZodiacSign)
+		if err != nil {
+			prediction, _ = GenerateDailyHoroscope(user.ZodiacSign)
+			SaveDailyPrediction(dbpool, user.ZodiacSign, prediction)
+		}
+
 		if prediction == "" {
 			prediction = "Звезды сегодня в ахуе и молчат."
 		}
@@ -183,4 +203,45 @@ func getPrivateMenu() tgbotapi.ReplyKeyboardMarkup {
 			tgbotapi.NewKeyboardButton("🔄 Изменить знак"),
 		),
 	)
+}
+
+func startCron(db *pgxpool.Pool) {
+	c := cron.New()
+
+	c.AddFunc("0 6 * * *", func() {
+		log.Printf("Запуск ежедневной генерации прогнозов...")
+		signs := []string{"aries", "taurus", "gemini", "cancer", "leo", "virgo", "libra", "scorpio", "sagittarius", "capricorn", "aquarius", "pisces"}
+
+		for _, sign := range signs {
+			text, _ := GenerateDailyHoroscope(sign)
+			SaveDailyPrediction(db, sign, text)
+		}
+	})
+
+	c.Start()
+}
+
+func runDailyUpdate(db *pgxpool.Pool) {
+	// Список всех знаков для генерации
+	signs := []string{"aries", "taurus", "gemini", "cancer", "leo", "virgo", "libra", "scorpio", "sagittarius", "capricorn", "aquarius", "pisces"}
+
+	log.Println("Начинаю массовую генерацию гороскопов через DeepSeek...")
+
+	for _, sign := range signs {
+		// 1. Генерируем текст через ИИ
+		text, err := GenerateDailyHoroscope(sign)
+		if err != nil {
+			log.Printf("Ошибка генерации для %s: %v", sign, err)
+			continue
+		}
+
+		// 2. Сохраняем в таблицу daily_horoscope
+		err = SaveDailyPrediction(db, sign, text)
+		if err != nil {
+			log.Printf("Ошибка сохранения в базу для %s: %v", sign, err)
+		} else {
+			log.Printf("Гороскоп для %s успешно обновлен!", sign)
+		}
+	}
+	log.Println("Массовая генерация завершена успешно.")
 }
