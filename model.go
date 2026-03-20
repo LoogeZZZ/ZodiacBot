@@ -36,3 +36,11 @@ var ZodiacNames = map[string]string{
 	"aquarius":    "Водолей ♒",
 	"pisces":      "Рыбы ♓",
 }
+
+type DashboardData struct {
+	UsersCount      int
+	NextUpdate      string
+	CurrentPrompt   string
+	DailyHoroscopes map[string]string
+	User            []User
+}

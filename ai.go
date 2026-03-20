@@ -8,23 +8,31 @@ import (
 	"log"
 	"net/http"
 	"os"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func GenerateDailyHoroscope(sign string) (string, error) {
+func GenerateDailyHoroscope(db *pgxpool.Pool, sign string) (string, error) {
 	apiKey := os.Getenv("DEEPSEEK_API_KEY")
 	if apiKey == "" {
 		return "", fmt.Errorf("ключ API пуст! Проверь .env")
 	}
-	log.Printf("Использую ключ: %s...", apiKey[:5])
+
 	url := "https://api.deepseek.com/v1/chat/completions"
 
-	prompt := fmt.Sprintf("Напиши очень смешной, матерный и жесткий гороскоп на сегодня для знака зодиака %s. Максимум 3 предложения. Используй черный юмор и мат.", ZodiacNames[sign])
+	basePrompt := GetSetting(db, "ai_prompt")
+
+	if basePrompt == "" {
+		basePrompt = "Напиши очень смешной, матерный и жесткий гороскоп на сегодня для знака зодиака %s. Максимум 3 предложения. Используй черный юмор и мат. Будь гендерно нейтральным"
+	}
+
+	finalPrompt := fmt.Sprintf(basePrompt, ZodiacNames[sign])
 
 	reqBody, _ := json.Marshal(DeepSeekRequest{
 		Model: "deepseek-chat",
 		Messages: []AIMessage{
-			{Role: "system", Content: "Ты — циничный и грубый астролог с черным юмором. Пишешь коротко и хлестко."},
-			{Role: "user", Content: prompt},
+			{Role: "system", Content: "Ты — пьяный астролог-мизантроп, которому всё надоело. Пишешь гороскопы."},
+			{Role: "user", Content: finalPrompt},
 		},
 	})
 

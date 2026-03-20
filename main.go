@@ -34,6 +34,8 @@ func main() {
 
 	startCron(dbpool)
 
+	go StartAdminPanel(dbpool)
+
 	bot, err := tgbotapi.NewBotAPI(botToken)
 	if err != nil {
 		log.Panic(err)
@@ -95,7 +97,7 @@ func handleMessage(bot *tgbotapi.BotAPI, dbpool *pgxpool.Pool, msg *tgbotapi.Mes
 			prediction, err := GetDailyPrediction(dbpool, user.ZodiacSign)
 			if err != nil {
 				// Если в базе нет на сегодня, генерируем на лету
-				prediction, _ = GenerateDailyHoroscope(user.ZodiacSign)
+				prediction, err = GenerateDailyHoroscope(dbpool, user.ZodiacSign)
 				SaveDailyPrediction(dbpool, user.ZodiacSign, prediction)
 			}
 
@@ -130,7 +132,7 @@ func handleMessage(bot *tgbotapi.BotAPI, dbpool *pgxpool.Pool, msg *tgbotapi.Mes
 
 		prediction, err := GetDailyPrediction(dbpool, user.ZodiacSign)
 		if err != nil {
-			prediction, _ = GenerateDailyHoroscope(user.ZodiacSign)
+			prediction, err = GenerateDailyHoroscope(dbpool, user.ZodiacSign)
 			SaveDailyPrediction(dbpool, user.ZodiacSign, prediction)
 		}
 
@@ -213,7 +215,7 @@ func startCron(db *pgxpool.Pool) {
 		signs := []string{"aries", "taurus", "gemini", "cancer", "leo", "virgo", "libra", "scorpio", "sagittarius", "capricorn", "aquarius", "pisces"}
 
 		for _, sign := range signs {
-			text, _ := GenerateDailyHoroscope(sign)
+			text, _ := GenerateDailyHoroscope(db, sign)
 			SaveDailyPrediction(db, sign, text)
 		}
 	})
@@ -222,20 +224,17 @@ func startCron(db *pgxpool.Pool) {
 }
 
 func runDailyUpdate(db *pgxpool.Pool) {
-	// Список всех знаков для генерации
 	signs := []string{"aries", "taurus", "gemini", "cancer", "leo", "virgo", "libra", "scorpio", "sagittarius", "capricorn", "aquarius", "pisces"}
 
 	log.Println("Начинаю массовую генерацию гороскопов через DeepSeek...")
 
 	for _, sign := range signs {
-		// 1. Генерируем текст через ИИ
-		text, err := GenerateDailyHoroscope(sign)
+		text, err := GenerateDailyHoroscope(dbpool, sign)
 		if err != nil {
 			log.Printf("Ошибка генерации для %s: %v", sign, err)
 			continue
 		}
 
-		// 2. Сохраняем в таблицу daily_horoscope
 		err = SaveDailyPrediction(db, sign, text)
 		if err != nil {
 			log.Printf("Ошибка сохранения в базу для %s: %v", sign, err)

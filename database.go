@@ -88,3 +88,47 @@ func GetDailyPrediction(db *pgxpool.Pool, sign string) (string, error) {
 	err := db.QueryRow(context.Background(), query, sign).Scan(&txt)
 	return txt, err
 }
+
+func GetSetting(db *pgxpool.Pool, key string) string {
+	var val string
+	query := `SELECT value FROM settings WHERE key = $1`
+	err := db.QueryRow(context.Background(), query, key).Scan(&val)
+	if err != nil {
+		return ""
+	}
+	return val
+}
+
+func UpdateSetting(db *pgxpool.Pool, key, value string) error {
+	_, err := db.Exec(context.Background(),
+		"INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2",
+		key, value)
+	return err
+}
+
+func GetCurrentHoroscopes(db *pgxpool.Pool) map[string]string {
+	rows, _ := db.Query(context.Background(), "SELECT zodiac_sign, prediction_text FROM daily_horoscope WHERE target_date = CURRENT_DATE")
+	defer rows.Close()
+	res := make(map[string]string)
+	for rows.Next() {
+		var sign, text string
+		rows.Scan(&sign, &text)
+		res[sign] = text
+	}
+	return res
+}
+
+func GetAllUsers(db *pgxpool.Pool) ([]User, error) {
+	rows, err := db.Query(context.Background(), "SELECT id, username, zodiac_sign FROM users")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var users []User
+	for rows.Next() {
+		var u User
+		rows.Scan(&u.ID, &u.Username, &u.ZodiacSign)
+		users = append(users, u)
+	}
+	return users, nil
+}
