@@ -13,7 +13,7 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
-var dbpool *pgxpool.Pool
+// var dbpool *pgxpool.Pool
 
 func main() {
 	godotenv.Load()
@@ -26,7 +26,7 @@ func main() {
 	}
 
 	var err error
-	dbpool = InitDB(dbURL)
+	dbpool := InitDB(dbURL)
 	defer dbpool.Close()
 
 	log.Println("Запуск проверки генерации ИИ...")
@@ -229,7 +229,7 @@ func runDailyUpdate(db *pgxpool.Pool) {
 	log.Println("Начинаю массовую генерацию гороскопов через DeepSeek...")
 
 	for _, sign := range signs {
-		text, err := GenerateDailyHoroscope(dbpool, sign)
+		text, err := GenerateDailyHoroscope(db, sign)
 		if err != nil {
 			log.Printf("Ошибка генерации для %s: %v", sign, err)
 			continue
