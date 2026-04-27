@@ -36,6 +36,8 @@ cd ZodiacBot
 BOT_TOKEN=your_telegram_bot_token
 DB_URL=postgres://user:password@localhost:5432/zodiacbot
 DEEPSEEK_API_KEY=your_deepseek_api_key
+ADMIN_USER=admin
+ADMIN_PASS=password
 ```
 
 ### 3. Запусти базу данных
